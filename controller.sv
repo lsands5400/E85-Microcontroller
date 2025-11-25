@@ -1,4 +1,4 @@
-module controller_ls(input  logic       clk,
+module controller(input  logic       clk,
                   input  logic       reset,  
                   input  logic [6:0] op,
                   input  logic [2:0] funct3,
@@ -215,4 +215,5 @@ module instructDecode(input  logic [6:0] op,
 
 
 endmodule
+
 
