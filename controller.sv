@@ -72,8 +72,7 @@ module mainFSM(input  logic       clk,
                   output logic       regwrite, memwrite,
 						output logic       branch, pcupdate);
 
-		typedef enum logic[10:0] {S0, S1, S2, S3, S4, S5, S6,
-											S7, S8, S9, S10} statetype;
+		typedef enum logic[10:0] {S0, S1, S2, S3, S4, S5, S6, S7, S8, S9, S10} statetype;
 		statetype state, nextstate;
 		
 		// state register 
@@ -88,8 +87,8 @@ module mainFSM(input  logic       clk,
 					
 					S1: 
 						case(op)
-							7'b0000001:						      nextstate = S2; // lw or sw
-							7'b0100011:						      nextstate = S2; // lw or sw
+							7'b0000011:						      nextstate = S2; // lw
+							7'b0100011:						      nextstate = S2; // sw
 							7'b0110011:								nextstate = S6; // R-Type
 							7'b0010011:								nextstate = S8; // I-Type ALU
 							7'b1101111:								nextstate = S9; // jal
@@ -137,7 +136,7 @@ module mainFSM(input  logic       clk,
 			assign alusrcb[1] = (state == S0) | (state == S9);
 			assign alusrcb[0] = (state == S1) | (state == S2) | (state == S8);
 			
-			assign resultsrc[1] = (state == S0) | (state == S2);
+			assign resultsrc[1] = (state == S0);
 			assign resultsrc[0] = (state == S4);
 			
 			assign aluop[1] = (state == S6) | (state == S8);
@@ -215,5 +214,3 @@ module instructDecode(input  logic [6:0] op,
 
 
 endmodule
-
-
