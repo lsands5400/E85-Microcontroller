@@ -1,4 +1,4 @@
-module controller(input  logic       clk,
+module controller_ls(input  logic       clk,
                   input  logic       reset,  
                   input  logic [6:0] op,
                   input  logic [2:0] funct3,
@@ -39,9 +39,7 @@ module controller(input  logic       clk,
 							ao,
 							aluc);
 						
-		instructDecode i(clk,
-								reset,
-								op,
+		instructDecode inst(op,
 								
 								imm);
 								
@@ -75,7 +73,7 @@ module mainFSM(input  logic       clk,
                   output logic       regwrite, memwrite,
 						output logic       branch, pcupdate);
 
-		typedef enum logic[10:0] {S0, S1, S2, S3, S4, S5, S6
+		typedef enum logic[10:0] {S0, S1, S2, S3, S4, S5, S6,
 											S7, S8, S9, S10} statetype;
 		statetype state, nextstate;
 		
@@ -89,17 +87,23 @@ module mainFSM(input  logic       clk,
 				case(state)
 					S0:																nextstate = S1;
 					
-					S1: if ((op = 7'b0000011) | (op = 7'b0100011))     nextstate = S2; // lw or sw
-						else if (op = 7'b0110011)								nextstate = S6; // R-Type
-						else if (op = 7'b0010011)								nextstate = S8; // I-Type ALU
-						else if (op = 7'b1101111)								nextstate = S9; // jal
-						else if (op = 7'b1100011)								nextstate = S10; // beq
-						else 															nextstate = S1;
+					S1: 
+						case(op)
+							7'b0000001:						      nextstate = S2; // lw or sw
+							7'b0100011:						      nextstate = S2; // lw or sw
+							7'b0110011:								nextstate = S6; // R-Type
+							7'b0010011:								nextstate = S8; // I-Type ALU
+							7'b1101111:								nextstate = S9; // jal
+							7'b1100011:								nextstate = S10; // beq
+							default: 								nextstate = S1;
+						endcase
 					
-					S2: if ((op = 7'b0000011))    							nextstate = S3; // lw
-						else if (op = 7'b0100011)								nextstate = S5; // sw
-						else 															nextstate = S2;
-					
+					S2: 
+						case(op)
+							7'b0000011:    							nextstate = S3; // lw
+							7'b0100011:									nextstate = S5; // sw
+							default: 									nextstate = S2;
+						endcase
 					S3:																nextstate = S4;
 					
 					S4:																nextstate = S0;
@@ -160,26 +164,26 @@ module decoderALU(input  logic       clk,
 				2'b00: 					alucontrol = 3'b000; // lw, sw => add
 				2'b01: 					alucontrol = 3'b001; // beq => subtract
 				2'b10:
-					if (((op[5] = 0) & (funct7b5 = 0) |
-							(op[5] = 0) & (funct7b5 = 1) |
-							(op[5] = 1) & (funct7b5 = 0)) &
-							(funct3 = 3'b000))
+					if (((op[5] == 0) & (funct7b5 == 0) |
+							(op[5] == 0) & (funct7b5 == 1) |
+							(op[5] == 1) & (funct7b5 == 0)) &
+							(funct3 == 3'b000))
 											alucontrol = 3'b000; // add => add
 								
-					else if ((op[5] = 1) & (funct7b5 = 1) &
-									(funct3 = 3'b000))
+					else if ((op[5] == 1) & (funct7b5 == 1) &
+									(funct3 == 3'b000))
 											alucontrol = 3'b001; // sub => subtract
 											
-					else if ((funct7b5 = 0) &
-									(funct3 = 3'b010))
+					else if ((funct7b5 == 0) &
+									(funct3 == 3'b010))
 											alucontrol = 3'b101; // slt => set less than
 											
-					else if ((funct7b5 = 0) &
-									(funct3 = 3'b110))
+					else if ((funct7b5 == 0) &
+									(funct3 == 3'b110))
 											alucontrol = 3'b011; // or => or
 					
-					else if ((funct7b5 = 0) &
-									(funct3 = 3'b111))
+					else if ((funct7b5 == 0) &
+									(funct3 == 3'b111))
 											alucontrol = 3'b010; // and => and
 					else					alucontrol = 3'b111; // nothing
 					
@@ -207,7 +211,7 @@ module instructDecode(input  logic [6:0] op,
 				7'b0100011: immsrc = 2'b01; // sw
 				7'b1100011: immsrc = 2'b10; // beq
 				7'b1101111: immsrc = 2'b11; // jal
-				
+				default:		immsrc = 2'b10; 
 			endcase
 
 
