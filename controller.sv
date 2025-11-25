@@ -40,7 +40,6 @@ module controller_ls(input  logic       clk,
 							aluc);
 						
 		instructDecode inst(op,
-								
 								imm);
 								
 								
@@ -200,7 +199,7 @@ endmodule
 // The instruction decoder takes op as an input
 // It outputs ImmSrc.
 module instructDecode(input  logic [6:0] op,
-							output logic [1:0] immsrc);
+						output logic [1:0] immsrc);
 						
 		always_comb
 			case(op)
@@ -216,3 +215,4 @@ module instructDecode(input  logic [6:0] op,
 
 
 endmodule
+
