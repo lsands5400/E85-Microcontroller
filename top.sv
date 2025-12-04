@@ -97,6 +97,7 @@ module datapath(input logic			clk, reset,
 	  srcamux 			amux(pc, oldpc, a, alusrca, srca);
 	  srcbmux 			bmux(writedata, immext, alusrcb, srcb);
 	  alu 				alu1(srca, srcb, alucontrol, aluresult, zero);
+	  flopr #(32)		alureg(clk, reset, aluresult, aluout);
 	 
 	  // result logic
 	  flopr #(32) 		datareg(clk, reset, readdata, data);
@@ -209,6 +210,7 @@ module regfile(input  logic        clk,
                input  logic        WE3, 
                input  logic [ 4:0] A1, A2, A3, 
                input  logic [31:0] WD3, 
+					
                output logic [31:0] RD1, RD2);
 
 		logic [31:0] rf[31:0];
