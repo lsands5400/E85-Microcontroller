@@ -28,9 +28,9 @@ module riscv(input logic					clk,
 				output logic [31:0]		writedata,
 				output logic				memwrite);
 				
-		logic				regwrite, alusrca, alusrcb, pcwrite, irwrite,
+		logic				regwrite, pcwrite, irwrite,
 								adrsrc, zero;
-		logic	[1:0]		immsrc, resultsrc;
+		logic	[1:0]		immsrc, resultsrc, alusrca, alusrcb;
 		logic	[2:0]		alucontrol;
 		logic [31:0] 	instr;
 		
@@ -60,7 +60,7 @@ endmodule
 module datapath(input logic			clk, reset,
 					input logic				regwrite,
 					input logic	[1:0]		immsrc,
-					input logic				alusrca, alusrcb,
+					input logic	[1:0]		alusrca, alusrcb,
 					input logic	[2:0]		alucontrol,
 					input logic	[1:0]		resultsrc,
 					input logic				pcwrite, irwrite,
@@ -68,7 +68,7 @@ module datapath(input logic			clk, reset,
 					
 					input logic	[31:0]	readdata,
 					
-					output logic	[31:0]	instr,
+					output logic [31:0]		instr,
 					output logic				zero,
 					output logic [31:0]		adr,
 					output logic [31:0]		writedata);
@@ -78,7 +78,7 @@ module datapath(input logic			clk, reset,
 	  logic [31:0] a;
 	  logic [31:0] srca, srcb;
 	  logic [31:0] srcatemp, writedatatemp;
-	  logic [31:0] result, aluresult;
+	  logic [31:0] result, aluresult, data;
 	  logic [31:0] aluout;
 
 	  // adr logic
@@ -109,7 +109,7 @@ endmodule
 
 // This is the mux that takes AdrSrc to decide whether to 
 // take the PC value or the result value to put into the memory. 
-module adrmux #(parameter WIDTH = 8)
+module adrmux #(parameter WIDTH = 32)
 					(input  logic [WIDTH-1:0] 	pc, result, 
 					input  logic             	adrsrc,
 					output logic [WIDTH-1:0] 	adr);
@@ -120,7 +120,7 @@ endmodule
 
 // This is the mux that takes alusrca to decide whether to 
 // take the PC value, the OldPC value, or the A value to put into the ALU. 
-module srcamux #(parameter WIDTH = 8)
+module srcamux #(parameter WIDTH = 32)
 					(input  logic [WIDTH-1:0] 			pc, oldpc, a, 
 					input  logic [1:0]             	alusrca, 
 					output logic [WIDTH-1:0] 			srca);
@@ -132,7 +132,7 @@ endmodule
 
 // This is the mux that takes alusrcb to decide whether to take the write/readdata 
 // value, the extended immediate, or the value 4 to put into the ALU. 
-module srcbmux #(parameter WIDTH = 8)
+module srcbmux #(parameter WIDTH = 32)
 					(input  logic [WIDTH-1:0] 			wdrd, immext, 
 					input  logic [1:0]             	alusrcb, 
 					output logic [WIDTH-1:0] 			srcb);
@@ -143,7 +143,7 @@ endmodule
 
 // This is the mux that takes resultsrc to decide whether to take the aluout
 // value, the data value, or the aluresult value to put into the result path. 
-module resmux #(parameter WIDTH = 8)
+module resmux #(parameter WIDTH = 32)
 					(input  logic [WIDTH-1:0] 			aluout, data, aluresult,
 					input  logic [1:0]             	resultsrc, 
 					output logic [WIDTH-1:0] 			result);
@@ -225,7 +225,7 @@ module regfile(input  logic        clk,
 endmodule
 
 // This is the flip flop module with an enable.
-module enflopr #(parameter WIDTH = 8)
+module enflopr #(parameter WIDTH = 32)
               (input  logic             clk, reset,
 					input  logic				 en,
                input  logic [WIDTH-1:0] d, 
@@ -238,7 +238,7 @@ module enflopr #(parameter WIDTH = 8)
 endmodule
 
 // This is the flip flop module.
-module flopr #(parameter WIDTH = 8)
+module flopr #(parameter WIDTH = 32)
               (input  logic             clk, reset,
                input  logic [WIDTH-1:0] d, 
                output logic [WIDTH-1:0] q);
