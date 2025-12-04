@@ -3,10 +3,10 @@ module top(input  logic        clk, reset,
            output logic [31:0] WriteData, DataAdr, 
            output logic        MemWrite);
 		
-		logic[31:0] readdata, instr, adr
+		logic[31:0] readdata, adr;
 		
-		memory				mem(clk, MemWrite, adr, WriteData, );
-		riscv					multi(clk, reset, readdata, instr,
+		memory				mem(clk, MemWrite, adr, WriteData, readdata);
+		riscv					multi(clk, reset, readdata,
 											adr, WriteData, MemWrite);
 		assign DataAdr = adr;
 endmodule
@@ -23,17 +23,23 @@ endmodule
 module riscv(input logic					clk,
 				input logic						reset,
 				input logic [31:0]			readdata,
-				input logic [31:0]			instr,
-				
+
 				output logic [31:0] 		adr,
 				output logic [31:0]		writedata,
 				output logic				memwrite);
 				
 		logic				regwrite, alusrca, alusrcb, pcwrite, irwrite,
 								adrsrc, zero;
-		logic	[1:0]		immsrc, resultsrc
-		logic	[2:0]		alucontrol
+		logic	[1:0]		immsrc, resultsrc;
+		logic	[2:0]		alucontrol;
+		logic [31:0] 	instr;
 		
+		
+		datapath 				dp(clk, reset,
+										regwrite, immsrc, alusrca, alusrcb,
+										alucontrol, resultsrc, pcwrite, irwrite,
+										adrsrc, readdata, 
+										instr, zero, adr, writedata);
 	
 		controller 				ct(clk, reset,
 										instr[6:0], instr[14:12], instr[30], zero, 
@@ -41,11 +47,7 @@ module riscv(input logic					clk,
 										resultsrc, adrsrc, alucontrol,
 										irwrite, pcwrite, regwrite, memwrite);
 										
-		datapath 				dp(clk, reset,
-										regwrite, immsrc, alusrca, alusrcb,
-										alucontrol, resultsrc, pcwrite, irwrite,
-										adrsrc, instr, readdata, 
-										zero, adr, writedata);
+		
 
 endmodule
 
@@ -63,15 +65,15 @@ module datapath(input logic			clk, reset,
 					input logic	[1:0]		resultsrc,
 					input logic				pcwrite, irwrite,
 					input logic				adrsrc,
-					input logic	[31:0]	instr,
+					
 					input logic	[31:0]	readdata,
 					
+					output logic	[31:0]	instr,
 					output logic				zero,
 					output logic [31:0]		adr,
 					output logic [31:0]		writedata);
 					
 	  logic [31:0] pcnext, pc, oldpc;
-	  logic [31:0] adr;
 	  logic [31:0] immext;
 	  logic [31:0] a;
 	  logic [31:0] srca, srcb;
@@ -82,7 +84,6 @@ module datapath(input logic			clk, reset,
 	  // adr logic
 	  enflopr #(32) 	pcreg(clk, reset, pcwrite, pcnext, pc);
 	  adrmux  			mux1(pc, result, adrsrc, adr);    
-	  mux2 #(32)  		pcmux(PCPlus4, PCTarget, PCSrc, PCNext);
 	  
 	  // register file logic
 	  enflopr #(32) 	instrreg(clk, reset, irwrite, readdata, instr);
@@ -113,14 +114,14 @@ module adrmux #(parameter WIDTH = 8)
 					input  logic             	adrsrc,
 					output logic [WIDTH-1:0] 	adr);
 
-	assign adr = adrsc ? pc : result; 
+	assign adr = adrsrc ? pc : result; 
 
 endmodule
 
 // This is the mux that takes alusrca to decide whether to 
 // take the PC value, the OldPC value, or the A value to put into the ALU. 
 module srcamux #(parameter WIDTH = 8)
-					(input  logic [WIDTH-1:0] 			pc, oldpc, a 
+					(input  logic [WIDTH-1:0] 			pc, oldpc, a, 
 					input  logic [1:0]             	alusrca, 
 					output logic [WIDTH-1:0] 			srca);
 
@@ -136,14 +137,14 @@ module srcbmux #(parameter WIDTH = 8)
 					input  logic [1:0]             	alusrcb, 
 					output logic [WIDTH-1:0] 			srcb);
 
-	assign srcb = alusrcb[1] ? 4 : (alusrcb[0] ? wdrd : oldpc); 
+	assign srcb = alusrcb[1] ? 4 : (alusrcb[0] ? wdrd : immext); 
 	
 endmodule
 
 // This is the mux that takes resultsrc to decide whether to take the aluout
 // value, the data value, or the aluresult value to put into the result path. 
 module resmux #(parameter WIDTH = 8)
-					(input  logic [WIDTH-1:0] 			aluout, data, aluresult
+					(input  logic [WIDTH-1:0] 			aluout, data, aluresult,
 					input  logic [1:0]             	resultsrc, 
 					output logic [WIDTH-1:0] 			result);
 
@@ -164,7 +165,7 @@ module alu(input logic [31:0]				srca,
 		logic        sub;
   
 		assign sub = (alucontrol[1:0] == 2'b01);
-		assign condinvb = sub ? ~b : b; // for subtraction or slt
+		assign condinvb = sub ? ~srcb : srcb; // for subtraction or slt
 				
 		always_comb
 			case(alucontrol)
@@ -176,15 +177,15 @@ module alu(input logic [31:0]				srca,
 				default:	aluresult =0;				
 			endcase
 
-		assign zero = (result == 32'b0);
+		assign zero = (aluresult == 32'b0);
 		
 endmodule
 
 // This extends the immediate based on the immsrc value
-module extend(input logic [31:7]			instr,
-					input logic	[1:0]			immsrc,
+module extend(input logic [31:7]			Instr,
+					input logic	[1:0]			ImmSrc,
 					
-					output logic [31:0]		immext);
+					output logic [31:0]		ImmExt);
 					
 		always_comb
 			case(ImmSrc) 
@@ -231,8 +232,9 @@ module enflopr #(parameter WIDTH = 8)
                output logic [WIDTH-1:0] q);
 
   always_ff @(posedge clk, posedge reset)
-    if (reset & en) q <= 0;
-    else       q <= d;
+    if (reset) 	q <= 0;
+	 else if(en) 	q <= d;
+    else      		q <= q;
 endmodule
 
 // This is the flip flop module.
@@ -242,8 +244,8 @@ module flopr #(parameter WIDTH = 8)
                output logic [WIDTH-1:0] q);
 
   always_ff @(posedge clk, posedge reset)
-    if (reset) q <= 0;
-    else       q <= d;
+    if (reset) 	q <= 0;
+    else      		q <= d;
 endmodule
 
 
@@ -259,12 +261,12 @@ module memory(input logic 					clk,
 					input logic [31:0]		dataadr,
 					input logic	[31:0]		writedata,
 					
-					output logic		readdata);
+					output logic [31:0]		readdata);
 					
 		logic [31:0] RAM[63:0];
 		
 		always_ff @(posedge clk)
-			if (memwrite) RAM[A[31:2]] <= WD;
+			if (memwrite) RAM[dataadr[31:2]] <= writedata;
 
 		initial $readmemh("memfile.dat",RAM);
 		
