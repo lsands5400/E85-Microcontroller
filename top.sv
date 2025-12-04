@@ -114,7 +114,7 @@ module adrmux #(parameter WIDTH = 32)
 					input  logic             	adrsrc,
 					output logic [WIDTH-1:0] 	adr);
 
-	assign adr = adrsrc ? pc : result; 
+	assign adr = adrsrc ? result : pc; 
 
 endmodule
 
@@ -125,7 +125,7 @@ module srcamux #(parameter WIDTH = 32)
 					input  logic [1:0]             	alusrca, 
 					output logic [WIDTH-1:0] 			srca);
 
-	assign srca = alusrca[1] ? a : (alusrca[0] ? pc : oldpc); 
+	assign srca = alusrca[1] ? a : (alusrca[0] ? oldpc : pc); 
 
 endmodule
 
@@ -137,7 +137,7 @@ module srcbmux #(parameter WIDTH = 32)
 					input  logic [1:0]             	alusrcb, 
 					output logic [WIDTH-1:0] 			srcb);
 
-	assign srcb = alusrcb[1] ? 4 : (alusrcb[0] ? wdrd : immext); 
+	assign srcb = alusrcb[1] ? 4 : (alusrcb[0] ? immext : wdrd); 
 	
 endmodule
 
@@ -148,7 +148,7 @@ module resmux #(parameter WIDTH = 32)
 					input  logic [1:0]             	resultsrc, 
 					output logic [WIDTH-1:0] 			result);
 
-	assign result = resultsrc[1] ? aluresult : (resultsrc[0] ? aluout : data); 
+	assign result = resultsrc[1] ? aluresult : (resultsrc[0] ? data : aluout); 
  
 endmodule
 
@@ -166,6 +166,7 @@ module alu(input logic [31:0]				srca,
   
 		assign sub = (alucontrol[1:0] == 2'b01);
 		assign condinvb = sub ? ~srcb : srcb; // for subtraction or slt
+		assign sum = srca + condinvb + sub;
 				
 		always_comb
 			case(alucontrol)
