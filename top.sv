@@ -2,8 +2,13 @@ module top(input  logic        clk, reset,
 
            output logic [31:0] WriteData, DataAdr, 
            output logic        MemWrite);
-
-
+		
+		logic[31:0] readdata, instr, adr
+		
+		memory				mem(clk, MemWrite, adr, WriteData, );
+		riscv					multi(clk, reset, readdata, instr,
+											adr, WriteData, MemWrite);
+		assign DataAdr = adr;
 endmodule
 
 
@@ -15,17 +20,33 @@ endmodule
 // The processor takes clk, reset, ReadData, 
 // and the instruction as an input.
 // It outputs PC, ALUResult, and WriteData, and MemWrite to the memory.
-module riscv(input logic		clk,
-				input logic			reset,
-				input logic			readdata,
-				input logic			instr,
+module riscv(input logic					clk,
+				input logic						reset,
+				input logic [31:0]			readdata,
+				input logic [31:0]			instr,
 				
-				output logic 		pc,
-				output logic		aluresult,
-				output logic		writedata,
-				output logic		memwrite);
+				output logic [31:0] 		adr,
+				output logic [31:0]		writedata,
+				output logic				memwrite);
 				
-				// TODO: Fill this in
+		logic				regwrite, alusrca, alusrcb, pcwrite, irwrite,
+								adrsrc, zero;
+		logic	[1:0]		immsrc, resultsrc
+		logic	[2:0]		alucontrol
+		
+	
+		controller 				ct(clk, reset,
+										instr[6:0], instr[14:12], instr[30], zero, 
+										immsrc, alusrca, alusrcb,
+										resultsrc, adrsrc, alucontrol,
+										irwrite, pcwrite, regwrite, memwrite);
+										
+		datapath 				dp(clk, reset,
+										regwrite, immsrc, alusrca, alusrcb,
+										alucontrol, resultsrc, pcwrite, irwrite,
+										adrsrc, instr, readdata, 
+										zero, adr, writedata);
+
 endmodule
 
 
@@ -34,50 +55,62 @@ endmodule
 //
 //
 // Datapath Modules	
-module datapath(input logic			regwrite,
+module datapath(input logic			clk, reset,
+					input logic				regwrite,
 					input logic	[1:0]		immsrc,
-					input logic				alusrc,
+					input logic				alusrca, alusrcb,
 					input logic	[2:0]		alucontrol,
 					input logic	[1:0]		resultsrc,
-					input logic				pcsrc,
+					input logic				pcwrite, irwrite,
+					input logic				adrsrc,
 					input logic	[31:0]	instr,
 					input logic	[31:0]	readdata,
 					
 					output logic				zero,
-					output logic [31:0]		pc,
-					output logic [31:0]		aluresult,
+					output logic [31:0]		adr,
 					output logic [31:0]		writedata);
 					
-				// TODO: Fix for multi
-					
-	  logic [31:0] PCNext, PCPlus4, PCTarget;
-	  logic [31:0] ImmExt;
-	  logic [31:0] SrcA, SrcB;
-	  logic [31:0] Result;
+	  logic [31:0] pcnext, pc, oldpc;
+	  logic [31:0] adr;
+	  logic [31:0] immext;
+	  logic [31:0] a;
+	  logic [31:0] srca, srcb;
+	  logic [31:0] srcatemp, writedatatemp;
+	  logic [31:0] result, aluresult;
+	  logic [31:0] aluout;
 
-	  // next PC logic
-	  flopr #(32) pcreg(clk, reset, PCNext, PC);
-	  adrmux      
+	  // adr logic
+	  enflopr #(32) 	pcreg(clk, reset, pcwrite, pcnext, pc);
+	  adrmux  			mux1(pc, result, adrsrc, adr);    
+	  mux2 #(32)  		pcmux(PCPlus4, PCTarget, PCSrc, PCNext);
 	  
-	  mux2 #(32)  pcmux(PCPlus4, PCTarget, PCSrc, PCNext);
-	 
 	  // register file logic
-	  regfile     RF(clk, RegWrite, Instr[19:15], Instr[24:20], 
-						  Instr[11:7], Result, SrcA, WriteData);
-	  extend      Ext(Instr[31:7], ImmSrc, ImmExt);
-
+	  enflopr #(32) 	instrreg(clk, reset, irwrite, readdata, instr);
+	  regfile 			rf(clk, regwrite, instr[19:15], instr[24:20],
+									instr[11:7], result, srcatemp, writedatatemp);	
+	  flopr #(32)		srcareg(clk, reset, srcatemp, a);
+	  flopr #(32)		writereg(clk, reset, writedatatemp, writedata);
+	  extend      		ext(instr[31:7], immsrc, immext);	  
+	 
 	  // ALU logic
-	  mux2 #(32)  SrcBmux(WriteData, ImmExt, ALUSrc, SrcB);
-	  alu         ALU(SrcA, SrcB, ALUControl, ALUResult, Zero);
-	  mux3 #(32)  Resultmux(ALUResult, ReadData, PCPlus4, ResultSrc, Result);
-						
+	  srcamux 			amux(pc, oldpc, a, alusrca, srca);
+	  srcbmux 			bmux(writedata, immext, alusrcb, srcb);
+	  alu 				alu1(srca, srcb, alucontrol, aluresult, zero);
+	 
+	  // result logic
+	  flopr #(32) 		datareg(clk, reset, readdata, data);
+	  resmux				rmux(aluout, data, aluresult, resultsrc, result);
+		
+	  // PC logic
+	  assign 			pcnext = result;
+	  enflopr #(32) 	oldpcreg(clk, reset, irwrite, pc, oldpc);
 endmodule
 
 // This is the mux that takes AdrSrc to decide whether to 
 // take the PC value or the result value to put into the memory. 
 module adrmux #(parameter WIDTH = 8)
 					(input  logic [WIDTH-1:0] 	pc, result, 
-					input  logic             	adrsrc, 
+					input  logic             	adrsrc,
 					output logic [WIDTH-1:0] 	adr);
 
 	assign adr = adrsc ? pc : result; 
@@ -109,7 +142,7 @@ endmodule
 
 // This is the mux that takes resultsrc to decide whether to take the aluout
 // value, the data value, or the aluresult value to put into the result path. 
-module srcbmux #(parameter WIDTH = 8)
+module resmux #(parameter WIDTH = 8)
 					(input  logic [WIDTH-1:0] 			aluout, data, aluresult
 					input  logic [1:0]             	resultsrc, 
 					output logic [WIDTH-1:0] 			result);
@@ -190,7 +223,19 @@ module regfile(input  logic        clk,
 		 assign RD2 = (A2 != 0) ? rf[A2] : 0;
 endmodule
 
-// This is the flip flop module. It is a clk.
+// This is the flip flop module with an enable.
+module enflopr #(parameter WIDTH = 8)
+              (input  logic             clk, reset,
+					input  logic				 en,
+               input  logic [WIDTH-1:0] d, 
+               output logic [WIDTH-1:0] q);
+
+  always_ff @(posedge clk, posedge reset)
+    if (reset & en) q <= 0;
+    else       q <= d;
+endmodule
+
+// This is the flip flop module.
 module flopr #(parameter WIDTH = 8)
               (input  logic             clk, reset,
                input  logic [WIDTH-1:0] d, 
@@ -202,7 +247,6 @@ module flopr #(parameter WIDTH = 8)
 endmodule
 
 
-
 //
 //
 //
@@ -212,25 +256,19 @@ endmodule
 // The memory reads or writes data based on the write enable. 
 module memory(input logic 					clk,
 					input logic					memwrite,
-					input logic					pc,
 					input logic [31:0]		dataadr,
 					input logic	[31:0]		writedata,
 					
-					output logic		readdata,
-					output logic		instr);
+					output logic		readdata);
 					
 		logic [31:0] RAM[63:0];
+		
+		always_ff @(posedge clk)
+			if (memwrite) RAM[A[31:2]] <= WD;
 
 		initial $readmemh("memfile.dat",RAM);
 		
-				
-				// TODO: Fill this in
-				// if write enable == 0
-					// assign readdata = dataadr 
-				// else
-					// how do I get writedata into the dataadr?
-					
-		assign RD = RAM[dataadr[31:2]];
+		assign readdata = RAM[dataadr[31:2]];
 				
 endmodule
 					
